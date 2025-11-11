@@ -24,3 +24,51 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+.psv-marker-arrow {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 0.75rem 1.1rem;
+  border-radius: 9999px;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  background: linear-gradient(
+    135deg,
+    rgba(16, 185, 129, 0.96),
+    rgba(5, 150, 105, 0.92)
+  );
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.95rem;
+  letter-spacing: 0.01em;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.45);
+  cursor: pointer;
+  pointer-events: auto;
+  white-space: nowrap;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.psv-marker-arrow:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.5);
+}
+
+.psv-marker-arrow__icon {
+  font-size: 1.35rem;
+  display: inline-block;
+  text-shadow: 0 4px 8px rgba(15, 23, 42, 0.4);
+}
+
+.psv-marker-arrow__label {
+  font-size: 0.85rem;
+  line-height: 1.1;
+  letter-spacing: 0.01em;
+  text-shadow: 0 2px 6px rgba(15, 23, 42, 0.4);
+}
+
+.psv-marker-arrow:focus-visible {
+  outline: 3px solid rgba(255, 255, 255, 0.9);
+  outline-offset: 2px;
+}

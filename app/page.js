@@ -25,12 +25,7 @@ export default function Home() {
               >
                 Enter the Virtual Tour
               </Link>
-              <a
-                href="#highlights"
-                className="inline-flex items-center justify-center rounded-full border border-emerald-200 px-6 py-3 text-base font-semibold text-emerald-700 transition hover:border-emerald-300 hover:text-emerald-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500"
-              >
-                See Highlights
-              </a>
+              
             </div>
           </div>
           <div className="relative h-64 w-full overflow-hidden rounded-3xl border border-slate-100 shadow-inner md:h-80 md:w-80">
@@ -45,38 +40,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section
-        id="highlights"
-        className="mt-16 grid w-full max-w-5xl gap-6 md:grid-cols-3"
-      >
-        {[
-          {
-            title: "Immersive 360° scenes",
-            description:
-              "High-resolution panoramas that let you explore each room from every angle.",
-          },
-          {
-            title: "Easy navigation",
-            description:
-              "Move between scenes with intuitive controls designed for desktop and mobile.",
-          },
-          {
-            title: "Campus showcase",
-            description:
-              "Highlight academic spaces, hostels, activity zones, and more in one experience.",
-          },
-        ].map((item) => (
-          <article
-            key={item.title}
-            className="rounded-2xl border border-slate-100 bg-white/70 p-6 shadow transition hover:-translate-y-1 hover:shadow-lg"
-          >
-            <h2 className="text-xl font-semibold text-slate-900">
-              {item.title}
-            </h2>
-            <p className="mt-3 text-slate-600">{item.description}</p>
-          </article>
-        ))}
-      </section>
+      
     </main>
   );
 }

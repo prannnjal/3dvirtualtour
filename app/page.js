@@ -35,7 +35,7 @@ export default function Home() {
           </div>
           <div className="relative h-64 w-full overflow-hidden rounded-3xl border border-slate-100 shadow-inner md:h-80 md:w-80">
             <Image
-              src="/tours/lobby.jpg"
+              src="/tours/ab.jpg"
               alt="Preview of the virtual tour lobby scene"
               fill
               className="object-cover"

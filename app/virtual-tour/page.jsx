@@ -3,8 +3,6 @@
 import { useEffect, useRef } from "react";
 import "photo-sphere-viewer/dist/photo-sphere-viewer.css";
 import "photo-sphere-viewer/dist/plugins/markers.css";
-import { MarkersPlugin } from "photo-sphere-viewer/dist/plugins/markers";
-import { Viewer } from "photo-sphere-viewer";
 
 const toRadians = (degrees) => (degrees * Math.PI) / 180;
 
@@ -19,7 +17,7 @@ const SCENES = [
     id: "lobby",
     name: "Lobby",
     caption: "Lobby Area - Saplings",
-    panorama: "/tours/lobby.jpg",
+    panorama: "/tours/ab.jpg",
     links: [
       {
         targetId: "assembly",
@@ -128,18 +126,57 @@ export default function VirtualTourPage() {
   useEffect(() => {
     if (!viewerContainerRef.current) return undefined;
 
-    const viewer = new Viewer({
-      container: viewerContainerRef.current,
-      panorama: SCENES[0].panorama,
-      caption: SCENES[0].caption,
-      loadingImg: "/loading.svg",
-      defaultZoomLvl: ZOOM_LEVELS.start,
-      plugins: [[MarkersPlugin, { markers: [] }]],
-      navbar: ["zoom", "fullscreen"],
-    });
+    // Dynamically import the viewer and plugin to avoid running DOM-dependent
+    // code during server-side rendering where `document` is undefined.
+    let mounted = true;
+    (async () => {
+      try {
+        const viewerModule = await import("photo-sphere-viewer");
+        const pluginModule = await import("photo-sphere-viewer/dist/plugins/markers");
+        const ViewerLib = viewerModule?.Viewer ?? viewerModule?.default ?? viewerModule;
+        const MarkersPluginLib = pluginModule?.MarkersPlugin ?? pluginModule?.default ?? pluginModule;
 
-    viewerRef.current = viewer;
-    markersPluginRef.current = viewer.getPlugin(MarkersPlugin);
+        if (!mounted || !viewerContainerRef.current) return;
+
+        const viewer = new ViewerLib({
+          container: viewerContainerRef.current,
+          panorama: SCENES[0].panorama,
+          caption: SCENES[0].caption,
+          loadingImg: "/loading.svg",
+          defaultZoomLvl: ZOOM_LEVELS.start,
+          plugins: [[MarkersPluginLib, { markers: [] }]],
+          navbar: ["zoom", "fullscreen"],
+        });
+
+        viewerRef.current = viewer;
+        markersPluginRef.current = viewer.getPlugin(MarkersPluginLib);
+
+        // Run initial marker update and zoom when viewer is ready
+        viewer.once("ready", () => {
+          updateMarkers(SCENES[0].id);
+
+          if (typeof viewer.stopAnimation === "function") {
+            viewer.stopAnimation().catch(() => {});
+          }
+
+          if (typeof viewer.zoom === "function") {
+            try {
+              viewer.zoom(ZOOM_LEVELS.target);
+            } catch (error) {
+              // ignore zoom preset errors
+            }
+          }
+        });
+
+        markersPluginRef.current?.on("select-marker", handleMarkerClick);
+      } catch (err) {
+        // Fail gracefully if the library can't be loaded
+        // (e.g., running in an environment without browser APIs)
+        // Keep error for debugging, but don't crash the component.
+        // eslint-disable-next-line no-console
+        console.error("Failed to load photo-sphere-viewer:", err);
+      }
+    })();
 
     const updateMarkers = (sceneId) => {
       const scene = getSceneById(sceneId);
@@ -201,26 +238,21 @@ export default function VirtualTourPage() {
       }
     };
 
-    viewer.once("ready", () => {
-      updateMarkers(SCENES[0].id);
-
-      if (typeof viewer.stopAnimation === "function") {
-        viewer.stopAnimation().catch(() => {});
-      }
-
-      if (typeof viewer.zoom === "function") {
-        try {
-          viewer.zoom(ZOOM_LEVELS.target);
-        } catch (error) {
-          // ignore zoom preset errors
-        }
-      }
-    });
-    markersPluginRef.current?.on("select-marker", handleMarkerClick);
-
     return () => {
-      markersPluginRef.current?.off("select-marker", handleMarkerClick);
-      viewer.destroy();
+      // mark mounted false to stop the async initializer from proceeding
+      // if it's still pending and avoid setting refs after unmount.
+      // Also try to remove listeners and destroy the viewer if present.
+      try {
+        markersPluginRef.current?.off("select-marker", handleMarkerClick);
+      } catch (e) {
+        // ignore
+      }
+      try {
+        viewerRef.current?.destroy();
+      } catch (e) {
+        // ignore
+      }
+      mounted = false;
     };
   }, []);
 

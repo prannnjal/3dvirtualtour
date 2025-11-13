@@ -260,7 +260,10 @@ export default function VirtualTourPage() {
     <main className="min-h-screen w-full bg-black text-white">
       <div className="mx-auto flex w-full max-w-6xl flex-col items-center px-4 py-6">
         <header className="mb-4 text-center">
-          <h1 className="text-3xl font-semibold">Saplings Virtual Tour</h1>
+          <h1 className="text-3xl font-semibold">
+            <span className="font-bold">Saplings</span>{" "}
+            <span className="font-semibold">Virtual Tour</span>
+          </h1>
           <p className="mt-2 text-base text-gray-300">
             Tap the floating arrows inside each scene to move between rooms.
           </p>

@@ -9,8 +9,17 @@ const toRadians = (degrees) => (degrees * Math.PI) / 180;
 const ZOOM_LEVELS = {
   start: 10,
   target: 45,
+  max: 120,
   speed: "1rpm",
 };
+
+const AUTO_ROTATE = {
+  speed: "0.5rpm",
+  idleDelayMs: 1000,
+};
+
+const USER_INTERACTION_EVENTS = ["pointerdown", "pointermove", "wheel", "keydown"];
+const VIEWER_INTERACTION_EVENTS = ["zoom-updated", "click"];
 
 const CONVERTED_IMAGES = [
   "IMG_20251015_170923_00_034.jpg",
@@ -35,6 +44,22 @@ const CONVERTED_IMAGES = [
   "IMG_20251015_175211_00_054.jpg",
 ];
 
+const FLOOR_PITCH = -80;
+const CENTER_YAWS = {
+  prev: -8,
+  next: 8,
+};
+
+const SCENE_LINK_OVERRIDES = {
+  "IMG_20251015_171004_00_035.jpg": {
+    extraLinks: [
+      { targetFilename: "IMG_20251015_174016_00_040.jpg", yaw: -20, pitch: FLOOR_PITCH, label: "Go to Upper Scene" },
+      { targetFilename: "IMG_20251015_174016_00_040.jpg", yaw: 0, pitch: FLOOR_PITCH, label: "Go to Upper Scene" },
+      { targetFilename: "IMG_20251015_174016_00_040.jpg", yaw: 20, pitch: FLOOR_PITCH, label: "Go to Upper Scene" },
+    ],
+  },
+};
+
 const getSceneIdFromIndex = (index) => `scene-${index + 1}`;
 
 const SCENES = CONVERTED_IMAGES.map((filename, index, arr) => {
@@ -46,18 +71,33 @@ const SCENES = CONVERTED_IMAGES.map((filename, index, arr) => {
       ? [
           {
             targetId: getSceneIdFromIndex(prevIndex),
-            yaw: -135,
-            pitch: 0,
+            yaw: CENTER_YAWS.prev,
+            pitch: FLOOR_PITCH,
             label: "Previous Scene",
           },
           {
             targetId: getSceneIdFromIndex(nextIndex),
-            yaw: 45,
-            pitch: 0,
+            yaw: CENTER_YAWS.next,
+            pitch: FLOOR_PITCH,
             label: "Next Scene",
           },
         ]
       : [];
+
+  const overrides = SCENE_LINK_OVERRIDES[filename];
+  if (overrides?.extraLinks?.length) {
+    overrides.extraLinks.forEach((link) => {
+      const targetIndex = CONVERTED_IMAGES.indexOf(link.targetFilename);
+      if (targetIndex !== -1) {
+        links.push({
+          targetId: getSceneIdFromIndex(targetIndex),
+          yaw: link.yaw,
+          pitch: link.pitch,
+          label: link.label ?? "Go to linked scene",
+        });
+      }
+    });
+  }
 
   return {
     id: getSceneIdFromIndex(index),
@@ -74,6 +114,51 @@ export default function VirtualTourPage() {
   const viewerContainerRef = useRef(null);
   const viewerRef = useRef(null);
   const markersPluginRef = useRef(null);
+  const idleTimerRef = useRef(null);
+  const isAutorotatingRef = useRef(false);
+
+  const clearIdleTimer = () => {
+    if (idleTimerRef.current) {
+      clearTimeout(idleTimerRef.current);
+      idleTimerRef.current = null;
+    }
+  };
+
+  const stopAutorotate = () => {
+    if (!viewerRef.current || !isAutorotatingRef.current) return;
+    try {
+      viewerRef.current.stopAutorotate?.();
+    } catch {
+      // ignore autorotate stop errors
+    } finally {
+      isAutorotatingRef.current = false;
+    }
+  };
+
+  const startAutorotate = () => {
+    if (!viewerRef.current || isAutorotatingRef.current) return;
+    try {
+      viewerRef.current.setOptions?.({
+        autorotateSpeed: AUTO_ROTATE.speed,
+      });
+      viewerRef.current.startAutorotate?.();
+      isAutorotatingRef.current = true;
+    } catch {
+      // ignore autorotate start errors
+    }
+  };
+
+  const resetIdleTimer = () => {
+    clearIdleTimer();
+    idleTimerRef.current = setTimeout(() => {
+      startAutorotate();
+    }, AUTO_ROTATE.idleDelayMs);
+  };
+
+  const handleUserInteraction = () => {
+    stopAutorotate();
+    resetIdleTimer();
+  };
 
   const playZoomIn = (viewer) => {
     if (!viewer) return;
@@ -98,6 +183,7 @@ export default function VirtualTourPage() {
 
   useEffect(() => {
     if (!viewerContainerRef.current) return undefined;
+    const domListeners = [];
 
     // Dynamically import the viewer and plugin to avoid running DOM-dependent
     // code during server-side rendering where `document` is undefined.
@@ -117,6 +203,7 @@ export default function VirtualTourPage() {
           caption: SCENES[0].caption,
           loadingImg: "/loading.svg",
           defaultZoomLvl: ZOOM_LEVELS.start,
+          maxFov: ZOOM_LEVELS.max,
           plugins: [[MarkersPluginLib, { markers: [] }]],
           navbar: ["zoom", "fullscreen"],
         });
@@ -139,6 +226,21 @@ export default function VirtualTourPage() {
               // ignore zoom preset errors
             }
           }
+
+          resetIdleTimer();
+        });
+
+        VIEWER_INTERACTION_EVENTS.forEach((eventName) => {
+          viewer.on(eventName, handleUserInteraction);
+        });
+
+        const container = viewer.container ?? viewerContainerRef.current;
+        const domInteractionHandler = () => handleUserInteraction();
+        USER_INTERACTION_EVENTS.forEach((eventName) => {
+          const target = eventName === "keydown" ? window : container;
+          if (!target) return;
+          target.addEventListener(eventName, domInteractionHandler, { passive: true });
+          domListeners.push({ target, eventName, handler: domInteractionHandler });
         });
 
         markersPluginRef.current?.on("select-marker", handleMarkerClick);
@@ -159,15 +261,20 @@ export default function VirtualTourPage() {
         id: `${sceneId}-${link.targetId}`,
         longitude: toRadians(link.yaw),
         latitude: toRadians(link.pitch),
-        html: `<button class="psv-marker-arrow" type="button">
+        html: `<button
+                  class="psv-marker-arrow"
+                  type="button"
+                  aria-label="${link.label}"
+                  title="${link.label}"
+                  style="background: transparent; border: none; padding: 0;"
+               >
                   <span class="psv-marker-arrow__icon" style="transform: rotate(${link.yaw}deg);">➤</span>
-                  <span class="psv-marker-arrow__label">${link.label}</span>
                </button>`,
         width: 180,
         height: 64,
         anchor: "center",
         static: true,
-        tooltip: link.label,
+        tooltip: null,
         data: {
           targetId: link.targetId,
         },
@@ -202,6 +309,7 @@ export default function VirtualTourPage() {
 
       updateMarkers(sceneId);
       playZoomIn(viewerInstance);
+      handleUserInteraction();
     };
 
     const handleMarkerClick = async (event, marker) => {
@@ -221,10 +329,26 @@ export default function VirtualTourPage() {
         // ignore
       }
       try {
+        VIEWER_INTERACTION_EVENTS.forEach((eventName) => {
+          viewerRef.current?.off(eventName, handleUserInteraction);
+        });
+      } catch {
+        // ignore
+      }
+      domListeners.forEach(({ target, eventName, handler }) => {
+        try {
+          target?.removeEventListener?.(eventName, handler);
+        } catch {
+          // ignore
+        }
+      });
+      try {
         viewerRef.current?.destroy();
       } catch (e) {
         // ignore
       }
+      clearIdleTimer();
+      stopAutorotate();
       mounted = false;
     };
   }, []);
